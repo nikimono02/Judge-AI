@@ -41,10 +41,11 @@ def build_historian_prompt(text: str) -> str:
         f"TEXT TO REVIEW: {text}\n\n"
         "Corrections:"
     )
-def build_historian_prompt_with_sources(text: str, sources: List[Dict]) -> str:
-    """Historian prompt when we already fetched web sources.
+def build_historian_prompt_with_sources(user_input: str, creative_answer: str, sources: List[Dict]) -> str:
+    """Historian prompt when we have web sources.
 
-    We show a numbered list of sources and ask the historian to cite [n].
+    The historian analyzes both the user's original question and the creative answer,
+    then provides constructive feedback with citations.
     """
     sources_block_lines = []
     for idx, src in enumerate(sources, start=1):
@@ -54,10 +55,14 @@ def build_historian_prompt_with_sources(text: str, sources: List[Dict]) -> str:
         sources_block_lines.append(f"[{idx}] {title} — {url}\n{snippet}")
     sources_block = "\n\n".join(sources_block_lines) if sources_block_lines else "(no sources)"
     return (
-        "You are a rigorous history expert. Use primary sources below.\n"
-        "- Verify claims, correct inaccuracies, and be concise (<= 80 words).\n"
-        "- Cite inline with [n] markers tied to Sources.\n"
-        f"TEXT TO REVIEW: {text}\n\n"
-        f"Sources:\n{sources_block}\n\n"
-        "Corrections with citations:"
+        "You are a history expert. Your job is to provide ACCURATE current information.\n"
+        "- CRITICAL: The web sources below are MORE CURRENT than your training data.\n"
+        "- If sources show information that differs from your knowledge, the sources are CORRECT.\n"
+        "- For current events, ALWAYS trust recent web sources over outdated training data.\n"
+        "- Give a direct, confident answer based on the sources provided.\n"
+        "- Be concise (<= 80 words) and cite sources with [n] markers.\n\n"
+        f"USER QUESTION: {user_input}\n\n"
+        f"CREATIVE ANSWER: {creative_answer}\n\n"
+        f"SOURCES:\n{sources_block}\n\n"
+        "Based on the sources above, the correct answer is:"
     )

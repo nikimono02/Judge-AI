@@ -1,11 +1,11 @@
 """
 Very simple server that streams three things to the browser in order:
 1) Creative answer text
-2) Web search evidence (to validate the creative answer)
-3) Historian feedback with citations
+2) Web search evidence (based on user input + creative answer)
+3) Historian analysis with constructive feedback and citations
 
 Flow:
-  user message -> creative answer -> web search validate creative -> historian feedback
+  user input -> creative answer -> historian analyzes both + web search -> constructive feedback with sources
 """
 
 from flask import Flask, request, jsonify, send_from_directory, Response
@@ -90,22 +90,32 @@ def api_stream():
             full_creative = "".join(creative_text)
             yield sse_format("creative_done", {"text": full_creative})
 
-            # 2) WEB SEARCH VALIDATION
-            # Build a simple combined query using BOTH the user's input
-            # and the generated creative answer. This helps search engines
-            # find sources that match the exact claim being made.
+            # 2) HISTORIAN ANALYSIS WITH WEB SEARCH
+            # The historian analyzes BOTH the user input and creative answer,
+            # does web search, and provides constructive feedback with sources.
+            
+            # First, let historian do the web search based on both inputs
             combined_query = (user_fact + "\n" + full_creative).strip()
             evidences = run_tavily_search(combined_query, max_results=5)
-            # Stream each evidence item to the UI
+            
+            # Stream evidence items to UI as they're found
             for ev in evidences:
                 yield sse_format("evidence", ev)
             yield sse_format("research_done", {"count": len(evidences)})
 
-            # 3) HISTORIAN FEEDBACK
-            # Build a historian prompt. If we have sources, the historian cites them.
-            # We pass the creative answer so historian can correct it and attach citations.
+            # Now historian analyzes everything and gives constructive feedback
             from prompts import build_historian_prompt_with_sources, build_historian_prompt
-            historian_prompt = build_historian_prompt_with_sources(full_creative, evidences) if evidences else build_historian_prompt(full_creative)
+            if evidences:
+                historian_prompt = build_historian_prompt_with_sources(user_fact, full_creative, evidences)
+            else:
+                # Fallback: if no evidence found, give historian a simple prompt to check current info
+                historian_prompt = (
+                    f"You are a history expert. The user asked: '{user_fact}'\n"
+                    f"The creative answer was: '{full_creative}'\n\n"
+                    "Please provide accurate, current information. If this is about current events, "
+                    "note that your knowledge may be outdated and suggest checking recent sources.\n\n"
+                    "Analysis:"
+                )
             
             # Stream the historian's feedback as it is generated
             for chunk in ollama.generate(
