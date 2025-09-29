@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="brand">
+          <span class="dot"></span>
+          <h1>AI Chat</h1>
+        </div>
+      </header>
+
+      <main class="chat">
+        <div class="columns">
+          <section class="column" id="creative-col">
+            <h2 class="col-title">Creative</h2>
+            <div id="messages-creative" class="messages" aria-live="polite" aria-label="Creative messages"></div>
+          </section>
+          <section class="column" id="historian-col">
+            <h2 class="col-title">Historian</h2>
+            <div id="messages-historian" class="messages" aria-live="polite" aria-label="Historian messages"></div>
+          </section>
+        </div>
+      </main>
+
+      <footer class="composer">
+        <form id="composer-form" class="composer-form" autocomplete="off">
+          <textarea id="input" class="input" name="message" rows="1" placeholder="Type a message... (Shift+Enter for new line)" aria-label="Message input"></textarea>
+          <button id="send" class="send" type="submit" aria-label="Send message">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"></path>
+            </svg>
+          </button>
+        </form>
+      </footer>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
