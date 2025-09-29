@@ -245,6 +245,16 @@ body {
 }
 .messages::-webkit-scrollbar-track { background: transparent; }
 
+/* Link styling */
+.annotation-body a {
+  color: #60a5fa;
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+.annotation-body a:hover {
+  color: #93c5fd;
+}
+
 @media (max-width: 640px) {
   .columns { grid-template-columns: 1fr; padding: 12px; }
   .messages { padding: 10px; }

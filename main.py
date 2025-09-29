@@ -1,19 +1,11 @@
 """
-Very simple server that streams three things to the browser in order:
-1) Creative answer text
-2) Web search evidence (based on user input + creative answer)
-3) Historian analysis with constructive feedback and citations
-
-Flow:
-  user input -> creative answer -> historian analyzes both + web search -> constructive feedback with sources
+Flow: User input -> creative answer -> historian analyzes both + web search -> constructive feedback with sources
 """
 
 from flask import Flask, request, jsonify, send_from_directory, Response
 from flask import stream_with_context
 import json
 import os
-
-# Import helper that calls Tavily web search
 from research import run_tavily_search
 
 # Create a minimal Flask app that serves static files and one API endpoint
@@ -59,79 +51,37 @@ def api_stream():
 
     @stream_with_context
     def generate():
-        """Generator that yields SSE messages in three stages."""
+        """Generator that yields SSE messages for creative and historian."""
         try:
-            # 1) CREATIVE ANSWER
-            # Decide if the user asked for a list (changes the prompt style)
-            creative_text = []
-            wants_list = any(kw in user_fact.lower() for kw in ["list", "name all", "enumerate", "show all", "give all", "all "])
+            import ollama
             
+            # 1) Creative answer
+            wants_list = "list" in user_fact.lower() or "all" in user_fact.lower()
             from prompts import build_creative_prompt
             creative_prompt = build_creative_prompt(user_fact, list_mode=wants_list)
             
-            # Try to import/connect to Ollama. If not available, bail gracefully.
-            try:
-                import ollama
-            except Exception as e:
-                yield sse_format("error", {"message": f"Ollama not available: {str(e)}"})
-                return
-            # Stream the creative answer as it is generated
-            for chunk in ollama.generate(
-                model="llama3",
-                prompt=creative_prompt,
-                options={"temperature": 0.9},
-                stream=True
-            ):
+            creative_text = []
+            for chunk in ollama.generate(model="llama3", prompt=creative_prompt, options={"temperature": 0.9}, stream=True):
                 piece = chunk.get("response", "")
                 if piece:
                     creative_text.append(piece)
                     yield sse_format("creative", {"delta": piece})
 
             full_creative = "".join(creative_text)
-            yield sse_format("creative_done", {"text": full_creative})
 
-            # 2) HISTORIAN ANALYSIS WITH WEB SEARCH
-            # The historian analyzes BOTH the user input and creative answer,
-            # does web search, and provides constructive feedback with sources.
+            # 2) Smart historian with research
+            search_query = f"{user_fact} latest news 2025 current information"
+            evidences = run_tavily_search(search_query, max_results=5)
             
-            # First, let historian do the web search based on both inputs
-            combined_query = (user_fact + "\n" + full_creative).strip()
-            evidences = run_tavily_search(combined_query, max_results=5)
+            from prompts import build_smart_historian_prompt
+            historian_prompt = build_smart_historian_prompt(user_fact, full_creative, evidences)
             
-            # Stream evidence items to UI as they're found
-            for ev in evidences:
-                yield sse_format("evidence", ev)
-            yield sse_format("research_done", {"count": len(evidences)})
-
-            # Now historian analyzes everything and gives constructive feedback
-            from prompts import build_historian_prompt_with_sources, build_historian_prompt
-            if evidences:
-                historian_prompt = build_historian_prompt_with_sources(user_fact, full_creative, evidences)
-            else:
-                # Fallback: if no evidence found, give historian a simple prompt to check current info
-                historian_prompt = (
-                    f"You are a history expert. The user asked: '{user_fact}'\n"
-                    f"The creative answer was: '{full_creative}'\n\n"
-                    "Please provide accurate, current information. If this is about current events, "
-                    "note that your knowledge may be outdated and suggest checking recent sources.\n\n"
-                    "Analysis:"
-                )
-            
-            # Stream the historian's feedback as it is generated
-            for chunk in ollama.generate(
-                model="llama3",
-                prompt=historian_prompt,
-                options={"temperature": 0.1},
-                stream=True
-            ):
+            for chunk in ollama.generate(model="llama3", prompt=historian_prompt, options={"temperature": 0.1}, stream=True):
                 piece = chunk.get("response", "")
                 if piece:
                     yield sse_format("historian", {"delta": piece})
 
-            yield sse_format("historian_done", {"ok": True})
-
         except Exception as e:
-            # If anything breaks, send an error event instead of crashing the stream
             yield sse_format("error", {"message": str(e)})
 
     return Response(generate(), mimetype="text/event-stream")

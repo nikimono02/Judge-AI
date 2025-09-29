@@ -66,7 +66,12 @@
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 160) + 'px';
   }
-  async function callStream(userText, { onCreativeDelta, onCreativeDone, onHistorianDelta, onHistorianDone, onEvidence, onResearchDone, onError }) {
+  function makeLinksClickable(text) {
+    // Convert URLs to clickable links
+    const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
+    return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #60a5fa; text-decoration: underline;">$1</a>');
+  }
+  async function callStream(userText, { onCreativeDelta, onHistorianDelta, onError }) {
     const res = await fetch('/api/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -98,11 +103,7 @@
         try {
           const data = JSON.parse(dataStr);
           if (eventType === 'creative') onCreativeDelta && onCreativeDelta(data.delta || '');
-          else if (eventType === 'creative_done') onCreativeDone && onCreativeDone(data.text || '');
-          else if (eventType === 'evidence') onEvidence && onEvidence(data);
-          else if (eventType === 'research_done') onResearchDone && onResearchDone(data);
           else if (eventType === 'historian') onHistorianDelta && onHistorianDelta(data.delta || '');
-          else if (eventType === 'historian_done') onHistorianDone && onHistorianDone();
           else if (eventType === 'error') onError && onError(data);
         } catch (e) {
           console.error('Bad SSE data', e);
@@ -124,53 +125,23 @@
     const creativeTextEl = creativeMsg.querySelector('.text');
     creativeTextEl.textContent = '';
     creativeEl.appendChild(creativeMsg);
-    const historianNote = createAnnotationElement('', 'Historian — Comment');
+    const historianNote = createAnnotationElement('', 'Historian — Final Answer');
     const historianTextEl = historianNote.querySelector('.annotation-body');
     historianTextEl.textContent = '';
     historianEl.appendChild(historianNote);
-    // Evidence container
-    const evidenceWrapper = document.createElement('div');
-    evidenceWrapper.className = 'annotation';
-    const evidenceHeader = document.createElement('div');
-    evidenceHeader.className = 'annotation-header';
-    evidenceHeader.textContent = 'Research — Evidence';
-    const evidenceBody = document.createElement('div');
-    evidenceBody.className = 'annotation-body';
-    evidenceWrapper.appendChild(evidenceHeader);
-    evidenceWrapper.appendChild(evidenceBody);
-    historianEl.appendChild(evidenceWrapper);
     scrollToBottom();
+    
+    // Track historian text separately for link conversion
+    let historianText = '';
     
     try {
       await callStream(text, {
         onCreativeDelta: (d) => { creativeTextEl.textContent += d; scrollToBottom(); },
-        onCreativeDone: () => {},
-        onEvidence: (ev) => {
-          const t = (ev && ev.title) ? ev.title : 'Untitled';
-          const u = (ev && ev.url) ? ev.url : '';
-          const s = (ev && ev.snippet) ? ev.snippet : '';
-          const line = document.createElement('div');
-          line.className = 'evidence-line';
-          const a = document.createElement('a');
-          a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer';
-          a.textContent = t;
-          const snip = document.createElement('div');
-          snip.className = 'evidence-snippet';
-          snip.textContent = s;
-          line.appendChild(a);
-          line.appendChild(snip);
-          evidenceBody.appendChild(line);
-          scrollToBottom();
+        onHistorianDelta: (d) => { 
+          historianText += d;
+          historianTextEl.innerHTML = makeLinksClickable(historianText); 
+          scrollToBottom(); 
         },
-        onResearchDone: (info) => {
-          const meta = document.createElement('div');
-          meta.className = 'evidence-meta';
-          meta.textContent = `Found: ${(info && typeof info.count === 'number') ? info.count : 0}`;
-          evidenceBody.appendChild(meta);
-          scrollToBottom();
-        },
-        onHistorianDelta: (d) => { historianTextEl.textContent += d; scrollToBottom(); },
-        onHistorianDone: () => {},
         onError: (err) => { creativeTextEl.textContent = 'Error'; historianTextEl.textContent = 'Error'; console.error(err); }
       });
     } catch (e) {
